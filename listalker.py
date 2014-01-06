@@ -64,7 +64,7 @@ def get_victims_from_search_page(page_response):
 
 def get_victim_from_search_request(browser, search_request):
     logging.info("searching by request %s", search_request)
-    for page_number in xrange(1, config['browser']['timeout']):
+    for page_number in xrange(1, 10):
         logging.info("going through page %s", page_number)
         r = browser.open(config['victims']['search-url-pattern']
                          % {'keywords': search_request,
