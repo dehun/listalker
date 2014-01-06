@@ -1,9 +1,11 @@
-import mechanize
 import cookielib
-import re
-import time
 import logging
 import random
+import re
+import sys
+import time
+
+import mechanize
 
 config = {
     'linkedin': {
@@ -11,11 +13,9 @@ config = {
         'password': 'your_password_here',
         'sleep': 1
     },
-    'database': {
-        'url': 'sqlite://listalker.sqlite'
-    },
     'browser': {
-        'user-agent': 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.0.1) Gecko/2008071615 Fedora/3.0.1-1.fc9 Firefox/3.0.1'
+        'user-agent': 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.0.1) Gecko/2008071615 Fedora/3.0.1-1.fc9 Firefox/3.0.1',
+        'timeout': 15
     },
     'victims': {
         'search-requests': [
@@ -34,9 +34,10 @@ def create_browser():
     browser.set_cookiejar(cookies)
 
     browser.set_handle_robots(False)
-    browser.set_handle_gzip(True)
+    browser.set_handle_gzip(False)
     browser.set_handle_equiv(True)
     browser.set_handle_referer(True)
+    browser.set_handle_refresh(False)
     browser.set_handle_redirect(True)
     browser.addheaders = [('User-agent',
                            config['browser']['user-agent'])]
@@ -45,7 +46,8 @@ def create_browser():
 
 def linkedin_login(browser):
     logging.info("logging in into linkedin")
-    browser.open('http://www.linkedin.com')
+    browser.open('http://www.linkedin.com',
+                 timeout=config['browser']['timeout'])
     browser.select_form(nr=0)
     browser.form['session_key'] = config['linkedin']['login']
     browser.form['session_password'] = config['linkedin']['password']
@@ -62,11 +64,12 @@ def get_victims_from_search_page(page_response):
 
 def get_victim_from_search_request(browser, search_request):
     logging.info("searching by request %s", search_request)
-    for page_number in range(0, 10):
+    for page_number in xrange(1, config['browser']['timeout']):
         logging.info("going through page %s", page_number)
         r = browser.open(config['victims']['search-url-pattern']
                          % {'keywords': search_request,
-                            'page': page_number})
+                            'page': page_number},
+                         timeout=config['browser']['timeout'])
         time.sleep(config['linkedin']['sleep'])
         for v in get_victims_from_search_page(r):
             yield v
@@ -86,7 +89,8 @@ def hunt_for_victims():
     browser = create_browser()
     # open the top link
     logging.info("opening top page www.linkedin.com")
-    browser.open('http://www.linkedin.com')
+    browser.open('http://www.linkedin.com',
+                 timeout=config['browser']['timeout'])
     # login into
     linkedin_login(browser)
     # get victims
@@ -105,10 +109,13 @@ def hunt_for_victims():
 
     # visit victims
     logging.info("going to visit %d persons", len(victims))
+    i = 0
     for victim in victims:
-        logging.info("visiting %s via url %s",
+        i += 1
+        logging.info("visiting %d of %d. %s via url %s",
+                     i, len(victims),
                      extract_id_from_victim(victim), victim)
-        browser.open(victim)
+        browser.open(victim, timeout=config['browser']['timeout'])
         browser.back()
         time.sleep(config['linkedin']['sleep'])
 
@@ -116,5 +123,8 @@ def hunt_for_victims():
 if __name__ == '__main__':
     logging.basicConfig(format="[%(asctime)s][%(levelname)s] %(message)s",
                         level=logging.INFO)
+
+    if len(sys.argv) > 1:
+        config['victims']['search-requests'] = sys.argv[1:]
 
     hunt_for_victims()
