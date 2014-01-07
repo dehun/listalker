@@ -4,6 +4,8 @@ import random
 import re
 import sys
 import time
+import urllib2
+import webbrowser
 
 import mechanize
 
@@ -21,8 +23,9 @@ config = {
         'search-requests': [
             'hr+stuttgart',
             'hr+prague'],
-        'search-url-pattern': 'http://www.linkedin.com/vsearch/f?type=all&keywords=%(keywords)s&orig=GLHD&rsid=&pageKey=member-home&page_num=%(page)d',
-        'to_visit_count': 50
+        'search-url-pattern': 'http://www.linkedin.com/vsearch/f?type=all&keywords=%(keywords)s&orig=GLHD&rsid=&pageKey=member-home&page_num=%(page)d&type=people',
+        'to-visit-count': 50,
+        'use-external-browser': True
     }
 }
 
@@ -85,6 +88,27 @@ def extract_id_from_victim(victim):
     return re.search('\?id=(.+?)&', victim).groups()[0]
 
 
+def visit_victims(browser, victims):
+    logging.info("going to visit %d persons", len(victims))
+    i = 0
+    for victim in victims:
+        i += 1
+        logging.info("visiting %d of %d. %s via url %s",
+                     i, len(victims),
+                     extract_id_from_victim(victim), victim)
+        if config['victims']['use-external-browser']:
+            webbrowser.open_new_tab(victim)
+        else:
+            try:
+                browser.open(victim, timeout=config['browser']['timeout'])
+                browser.back()
+            except urllib2.URLError as ex:
+                logging.error("failed to visit %d. Error %s",
+                              extract_id_from_victim(victim), ex)
+
+        time.sleep(config['linkedin']['sleep'])
+
+
 def hunt_for_victims():
     browser = create_browser()
     # open the top link
@@ -105,19 +129,10 @@ def hunt_for_victims():
 
     # limit victims to number from config
     random.shuffle(victims)
-    victims = victims[0:config['victims']['to_visit_count']]
+    victims = victims[0:config['victims']['to-visit-count']]
 
     # visit victims
-    logging.info("going to visit %d persons", len(victims))
-    i = 0
-    for victim in victims:
-        i += 1
-        logging.info("visiting %d of %d. %s via url %s",
-                     i, len(victims),
-                     extract_id_from_victim(victim), victim)
-        browser.open(victim, timeout=config['browser']['timeout'])
-        browser.back()
-        time.sleep(config['linkedin']['sleep'])
+    visit_victims(browser, victims)
 
 
 if __name__ == '__main__':
